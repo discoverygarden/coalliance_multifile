@@ -1,0 +1,7 @@
+; $Id$
+name = Colorado Multifile Uploader
+dependencies[] = fedora_repository
+description = Module to attach multiple files on colorado.
+package = Fedora Repository
+version = 6.x-0.1
+core = 6.x

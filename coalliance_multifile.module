@@ -1,0 +1,209 @@
+<?php
+
+function coalliance_multifile_menu() {
+  $items = array();
+  $items['islandora_co_manager/ingest_files'] = array(
+    'title' => 'File Upload Form',
+    'description' => 'Form to ingest files.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('coalliance_multifile_ingest_form'),
+    'access arguments' => array('add fedora datastreams'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+function coalliance_multifile_ingest_form(&$form_state, $pid = NULL) {
+  if (!$pid) {
+    $pid = variable_get('fedora_repository_pid', 'islandora:top');
+  }
+
+  $form = array();
+  $form['#attributes'] = array('enctype' => 'multipart/form-data');
+  $form['pid'] = array(
+    '#type' => 'hidden',
+    '#value' => $pid,
+  );
+  $form['coalliance-files'] = array(
+    '#type' => 'multifile',
+    '#title' => t('Upload Files'),
+    '#size' => 48,
+    '#description' => t('Select files to be added the the object as datastreams.'),
+    '#weight' => -1,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Ingest Files'),
+  );
+  return $form;
+}
+
+function coalliance_multifile_ingest_form_submit($form, &$form_state) {
+  global $base_url;
+  $pid = $form_state['values']['pid'];
+  $form_state['redirect'] = $base_url . "/fedora/repository/{$pid}";
+}
+
+/**
+ * Implements hook_elements()
+ */
+function coalliance_multifile_elements() {
+  $type = array();
+  $type['multifile'] = array(
+    '#input' => TRUE,
+    '#maxnumber' => '100',
+    '#filetypes' => '',
+  );
+  return $type;
+}
+
+/**
+* Implements hook_theme.
+*/
+function coalliance_multifile_theme() {
+  return array(
+    'multifile' => array('arguments' => array('element')),
+  );
+}
+
+
+/**
+* Theme hook for a multifile chooser
+*
+* @param $element the drupal element containing the multifile to be rendered
+*/
+function theme_multifile($element) {
+  $path = drupal_get_path('module', 'coalliance_multifile');
+  drupal_add_js($path . '/js/jquery.MultiFile.js');
+
+  $item = theme('form_element',
+                 $element,
+                 '<input type="file" name="' .
+                 $element['#name'] . '[]"' .
+                 ($element['#attributes'] ? ' ' . drupal_attributes($element['#attributes']) : '') .
+                 ' id="' . $element['#id'] .
+                 '" class="multi"' .
+                 ($element['#maxnumber'] ? 'maxlength="' . $element['#maxnumber'] . '" ' : '') .
+                 ($element['#filetypes'] ? 'accept="' . $element['#filetypes'] . '" ' : '') .
+                 'size="' .
+                 $element['#size'] .
+                 "\" />\n");
+
+  return $item;
+}
+
+/**
+* Turns a $_FILE array created by multifile into an array of arrays that
+* the drupal file functions can handle. For some reason the file data is
+* handled differently when we are using the multifile function.
+*
+* @param $file The $_FILE array to be transformed
+* @param $name string The name of the multifile component
+*
+* @return array An array of arrays each containing a vaild $_FILE for a file
+*/
+function coalliance_multifile_array_mangler($file, $name) {
+
+  if( empty($file[$name]['name']) )
+    return array();
+
+  $mangled = array();
+
+  $i = 0;
+  foreach( $file[$name]['name'] as $key => $filename ) {
+    $mangled[$i]['files'] = array();
+    $mangled[$i]['files']['name'] = array($name . $key => $file[$name]['name'][$i]);
+    $mangled[$i]['files']['type'] = array($name . $key => $file[$name]['type'][$i]);
+    $mangled[$i]['files']['tmp_name'] = array($name . $key => $file[$name]['tmp_name'][$i]);
+    $mangled[$i]['files']['error'] = array($name . $key => $file[$name]['error'][$i]);
+    $mangled[$i]['files']['size'] = array($name . $key => $file[$name]['size'][$i]);
+    $i++;
+  }
+
+  return $mangled;
+}
+
+function coalliance_multifile_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == "coalliance_form_adapter_ingest_form") {
+    if($form_state['storage']['step'] == 2) {
+      $form['coalliance-files'] = array(
+        '#type' => 'multifile',
+        '#title' => t('Upload Files'),
+        '#size' => 48,
+        '#description' => t('Select files to be added the the object as datastreams.'),
+        '#weight' => -1,
+      );
+      $form['#validate'][] = 'coalliance_multifile_validate_handler';
+      $form['#submit'][] = 'coalliance_multifile_submit_handler';
+    }
+  }
+  elseif ($form_id == "coalliance_multifile_ingest_form") {
+    $form['#validate'][] = 'coalliance_multifile_validate_handler';
+    $form['#submit'][] = 'coalliance_multifile_submit_handler';
+  }
+}
+
+function coalliance_multifile_validate_handler($form, &$form_state) {
+  if ($_FILES['coalliance-files']['error'][0] == 0) {
+    
+    module_load_include('inc', 'fedora_repository', 'ContentModel');
+    module_load_include('inc', 'fedora_repository', 'MimeClass');
+
+    $values = $form_state['values'];
+    $form_state['values']['coalliance-files'] = array();
+
+    $files = coalliance_multifile_array_mangler($_FILES, 'coalliance-files');
+    $filetmp = $_FILES;
+    foreach ($files as $key => $file) {
+      $_FILES = $file;
+      $file_object = file_save_upload('coalliance-files' . $key);
+      file_move($file_object->filepath, 0, 'FILE_EXISTS_RENAME');
+      $form_state['values']['coalliance-files'][$file_object->filename] = $file_object->filepath;
+    }
+    $_FILES = $filetmp;
+
+    foreach ($form_state['values']['coalliance-files'] as $file) {
+      $content_model = ContentModel::loadFromModel($values['content_model_pid'], $values['content_model_dsid']);
+      if ($content_model !== FALSE) {
+        $allowed_mime_types = $content_model->getMimetypes();
+        $mime = new MimeClass();
+        $mime_type = $mime->getType($file);
+        if (!in_array($mime_type, $allowed_mime_types)) {
+          $error = t("The uploaded file's mimetype ($mime_type) is not " .
+                  "associated with this Content Model. The allowed types are " .
+                  implode(' ', $allowed_mime_types));
+          form_set_error('coalliance-files', $error);
+          foreach ($form_state['values']['coalliance-files'] as $file)
+            file_delete($file);
+          return;
+        }
+      }
+    }
+  }
+}
+
+function coalliance_multifile_submit_handler($form, &$form_state) {
+  if($form_state['values']['coalliance-files']) {
+    module_load_include('inc', 'fedora_repository', 'api/fedora_util');
+    module_load_include('inc', 'fedora_repository', 'api/fedora_item');
+    module_load_include('inc', 'fedora_repository', 'MimeClass');
+
+    $files = $form_state['values']['coalliance-files'];
+    $item = new Fedora_Item($form_state['values']['pid']);
+    $mime = new MimeClass();
+
+    foreach($files as $dsid => $file) {
+      $label = $dsid;
+      $dsid = fix_dsid($dsid);
+      $mimetype = $mime->getType($file);
+      $item->add_datastream_from_file($file, $dsid, $label, $mimetype);
+      file_delete($file);
+    }
+  }
+}
+
+
+
+
+
+
