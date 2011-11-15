@@ -17,6 +17,9 @@ function coalliance_multifile_ingest_form(&$form_state, $pid = NULL) {
   if (!$pid) {
     $pid = variable_get('fedora_repository_pid', 'islandora:top');
   }
+  elseif($pid == 'undefined') {
+    $pid = variable_get('fedora_repository_pid', 'islandora:top');
+  }
 
   $form = array();
   $form['#attributes'] = array('enctype' => 'multipart/form-data');
