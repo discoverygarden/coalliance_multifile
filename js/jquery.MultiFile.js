@@ -296,7 +296,6 @@
         var
          r = $('<div class="MultiFile-label"></div>'),
          v = String(slave.value || ''/*.attr('value)*/),
-         a = $('<span class="MultiFile-title" title="'+MultiFile.STRING.selected.replace('$file', v)+'">'+MultiFile.STRING.file.replace('$file', v.match(/[^\/\\]+$/gi)[0])+'</span>'),
          b = $('<a class="MultiFile-remove" href="#'+MultiFile.wrapID+'">'+MultiFile.STRING.remove+'</a>');
          
          // Grab the value from the label textfield and the current path from the window.
@@ -317,18 +316,21 @@
          // instance of '.' with ~DOT~ and ' ' with ~SPACE~ as PHP does not 
          // like these characters in the POST. Creates a hidden input within
          // the Drupal form such that it can be posted when the user submits.
-         if (label != '') {
+          if (label != '') {
             var postlabel = v.replace(/\./g, '~DOT~');
             postlabel = postlabel.replace(/ /g, '~SPACE~');
             var hiddenInput = $('<input type="hidden" id="'+postlabel+'" value="'+label+'" name="'+postlabel+'">');
             hiddenInput.appendTo(formid);
             $("#multi-file-label").val('');
-         }
-                
+          }
+        
+        var a = $('<span class="MultiFile-title" title="'+MultiFile.STRING.selected.replace('$file', v)+'">'+MultiFile.STRING.file.replace('$file', v.match(/[^\/\\]+$/gi)[0])+'&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp'+label+'</span>');
+
+        
         // Insert label
         MultiFile.list.append(
-         r.append(b, ' ', a, '&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp', label)
-        );
+          r.append(b, ' ', a)
+        )
        
         b.click(function(){
          
