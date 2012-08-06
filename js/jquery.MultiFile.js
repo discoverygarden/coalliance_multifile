@@ -317,7 +317,11 @@
          // like these characters in the POST. Creates a hidden input within
          // the Drupal form such that it can be posted when the user submits.
           if (label != '') {
-            var postlabel = v.replace(/\./g, '~DOT~');
+            // IE 8+, Chrome, Safari
+            var postlabel = v.replace(/C:\\fakepath\\/i, '');
+            // IE 7-
+            postlabel = postlabel.replace(/(.)*\\/g, '');
+            postlabel = postlabel.replace(/\./g, '~DOT~');
             postlabel = postlabel.replace(/ /g, '~SPACE~');
             var hiddenInput = $('<input type="hidden" id="'+postlabel+'" value="'+label+'" name="'+postlabel+'">');
             hiddenInput.appendTo(formid);
